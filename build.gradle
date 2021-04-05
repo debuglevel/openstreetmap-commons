@@ -1,0 +1,55 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath "org.jetbrains.dokka:dokka-gradle-plugin:0.9.17"
+        classpath 'com.vanniktech:gradle-maven-publish-plugin:0.13.0'
+    }
+}
+
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.4.10'
+
+    // Release version with "./gradlew release"
+    id 'net.researchgate.release'
+}
+
+group 'de.debuglevel.commons.openstreetmap'
+version '0.0.1-SNAPSHOT'
+
+apply plugin: "java-library"
+apply plugin: "maven-publish"
+apply plugin: "maven"
+apply plugin: 'org.jetbrains.dokka'
+apply plugin: 'com.vanniktech.maven.publish'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib"
+
+    // Logging
+    // See http://saltnlight5.blogspot.com/2013/08/how-to-configure-slf4j-with-different.html for a quick introduction to slf4j
+    implementation 'io.github.microutils:kotlin-logging:1.6.26'
+    implementation 'org.slf4j:slf4j-api:1.7.25'
+    implementation 'org.slf4j:slf4j-simple:1.7.25'
+
+    // GraphViz
+    implementation 'guru.nidi:graphviz-java:0.8.8'
+}
+
+ext["signing.keyId"] = System.getenv('SIGNING_KEY_ID')
+ext["signing.password"] = System.getenv('SIGNING_PASSWORD')
+ext["signing.secretKeyRingFile"] = System.getenv('SIGNING_SECRET_KEY_RING_FILE')
+
+// Configuration of net.researchgate.release plugin
+release {
+    failOnCommitNeeded = true // fail because changed files would be committed automatically
+    failOnUnversionedFiles = false // don't fail because unversioned files would not be committed automatically
+    git {
+        requireBranch = 'main'
+    }
+}
