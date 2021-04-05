@@ -1,29 +1,25 @@
 package de.debuglevel.openstreetmap.overpass
 
-import de.debuglevel.microservicecommons.wait.WaitUtils
 import de.westnordost.osmapi.OsmConnection
 import de.westnordost.osmapi.overpass.OverpassMapDataDao
 import mu.KotlinLogging
 import java.time.Duration
-import java.util.concurrent.Executors
-import javax.inject.Singleton
 import kotlin.system.measureTimeMillis
 
-@Singleton
-class OverpassService(
-    private val overpassProperties: OverpassProperties,
+class OverpassClient(
+    baseUrl: String,
+    clientTimeout: Duration,
+    userAgent: String,
 ) {
     private val logger = KotlinLogging.logger {}
 
     private val overpass: OverpassMapDataDao
 
-    private val executor = Executors.newFixedThreadPool(overpassProperties.maximumThreads)
-
     init {
-        logger.debug { "Initializing with base URL ${overpassProperties.baseUrl}..." }
-        val millisecondTimeout = overpassProperties.timeout.client.seconds.toInt() * 1000
+        logger.debug { "Initializing with base URL ${baseUrl}..." }
+        val millisecondTimeout = clientTimeout.seconds.toInt() * 1000
         val osmConnection =
-            OsmConnection(overpassProperties.baseUrl, overpassProperties.userAgent, null, millisecondTimeout)
+            OsmConnection(baseUrl, userAgent, null, millisecondTimeout)
         overpass = OverpassMapDataDao(osmConnection)
     }
 
@@ -38,39 +34,32 @@ class OverpassService(
         overpassResultHandler: OverpassResultHandler<T>,
         serverTimeout: Duration
     ): List<T> {
-        logger.debug { "Enqueuing query..." }
-        val results = executor.submit<List<T>> {
-            WaitUtils.waitForNextRequestAllowed(this, overpassProperties.waitBetweenRequests)
+        logger.debug { "Executing Overpass query..." }
+        logger.trace { "Query:\n$query" }
 
-            logger.debug { "Executing Overpass query..." }
-            logger.trace { "Query:\n$query" }
+        val queryDurationMillis = measureTimeMillis {
+            overpass.queryTable(query, overpassResultHandler)
+        }
+        val queryDuration = Duration.ofMillis(queryDurationMillis)
+        logger.debug { "Query execution took a round trip time of about $queryDuration" } // includes overhead for transfer, parsing et cetera
 
-            val queryDurationMillis = measureTimeMillis {
-                overpass.queryTable(query, overpassResultHandler)
+        val results = try {
+            overpassResultHandler.getResults()
+        } catch (e: EmptyResultSetException) {
+            // if query duration took longer than the server timeout,
+            // there is good chance the server timeout was hit
+            if (queryDuration >= serverTimeout) {
+                throw TimeoutExceededException(serverTimeout, queryDuration)
+            } else {
+                throw e
             }
-            val queryDuration = Duration.ofMillis(queryDurationMillis)
-            logger.debug { "Query execution took a round trip time of about $queryDuration" } // includes overhead for transfer, parsing et cetera
+        }
 
-            val results = try {
-                overpassResultHandler.getResults()
-            } catch (e: EmptyResultSetException) {
-                // if query duration took longer than the server timeout,
-                // there is good chance the server timeout was hit
-                if (queryDuration >= serverTimeout) {
-                    throw TimeoutExceededException(serverTimeout, queryDuration)
-                } else {
-                    throw e
-                }
-            }
+        // TODO: possible failures:
+        //        - quota reached (what do then?)
+        //        - invalid resultset (don't know if and when happens)
 
-            // TODO: possible failures:
-            //        - quota reached (what do then?)
-            //        - invalid resultset (don't know if and when happens)
-
-            logger.debug { "Executed Overpass query: ${results.count()} results." }
-            WaitUtils.setLastRequestDateTime(this)
-            return@submit results
-        }.get()
+        logger.debug { "Executed Overpass query: ${results.count()} results." }
         return results
     }
 
