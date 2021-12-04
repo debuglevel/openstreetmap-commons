@@ -10,10 +10,10 @@ object OverpassQueryBuilder {
     private val logger = KotlinLogging.logger {}
 
     /**
-     * Set the query to output a CSV
-     * @param columns List of columns to be extracted from the original query output
-     * @param header Whether a header row with column names should be printed (should be true if OverpassQueryExecutor is used)
-     * @param delimiter String to delimit the CSV columns (the default Tabulator is probably a safe choice for OpenStreetMaps data)
+     * Generate a line to output the results as CSV.
+     * [columns] defines the list of columns which should be extracted from the original query output.
+     * [header] specifies whether a header row with column names should be printed.
+     * [delimiter] separates the CSV columns (the default tabulator is probably a safe choice for OpenStreetMaps data).
      */
     fun csvOutput(columns: List<String>, header: Boolean = true, delimiter: String = "\t"): String {
         logger.trace { "Building CSV output setting..." }
@@ -26,8 +26,8 @@ object OverpassQueryBuilder {
     }
 
     /**
-     * Set the server timeout
-     * @param timeout Query timeout; null use server default
+     * Generate a line to ask the server to modify the [timeout].
+     * If [timeout] is null, no line is generated and therefore the server default is used.
      */
     fun timeout(timeout: Duration?): String {
         // if timeout is set, it must be non-negative
